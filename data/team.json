@@ -1,0 +1,27 @@
+[
+    {
+        "teamId": "T001",
+        "teamName": "Team Nirma AUV",
+        "university": "Nirma University",
+        "category": "Autonomous Underwater Vehicle",
+        "registeredOn": "2026-07-21",
+        "rounds": [
+            {
+                "roundName": "Prelims",
+                "criteria": [
+                    { "name": "Autonomy", "score": 8 },
+                    { "name": "Design", "score": 7 },
+                    { "name": "Documentation", "score": 9 }
+                ]
+            }
+        ]
+    },
+    {
+        "teamId": "T002",
+        "teamName": "Team AquaBots",
+        "university": "IIT Delhi",
+        "category": "Autonomous Underwater Vehicle",
+        "registeredOn": "2026-07-21",
+        "rounds": []
+    }
+]
