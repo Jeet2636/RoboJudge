@@ -1,0 +1,314 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>RoboJudge — Team</title>
+
+    <!-- Practical 6 — Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: { extend: {
+                fontFamily: {
+                    sans: ['Barlow', 'system-ui', 'sans-serif'],
+                    display: ['"Barlow Condensed"', 'Barlow', 'sans-serif']
+                },
+                colors: {
+                    floor: '#F2F4F6', board: { DEFAULT: '#13233A', 2: '#1C3150', muted: '#8FA0B5' },
+                    signal: '#FFB000', rule: { DEFAULT: '#CBD3DC', soft: '#E3E8EE' },
+                    ink: '#13233A', muted: '#5A6676', final: '#1E8A5A', danger: '#D23A2E'
+                }
+            } }
+        };
+    </script>
+    <link href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600;700&family=Barlow+Condensed:wght@500;600;700&display=swap" rel="stylesheet">
+    <link href="theme.css" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body class="font-sans bg-floor text-ink antialiased">
+
+<div id="rjShell"></div>
+
+<div id="rjSections">
+
+    <!-- Overview: the team's own scoreboard -->
+    <section id="overview" class="mx-auto max-w-5xl">
+        <div id="teamBoard"></div>
+    </section>
+
+    <!-- Scores -->
+    <section id="scores" class="mx-auto hidden max-w-5xl space-y-5">
+        <div class="rj-sheet p-6">
+            <h2 class="font-display text-3xl font-semibold leading-none">Results by round</h2>
+            <p class="mt-2 max-w-[62ch] text-muted">
+                Each number is averaged across the judging panel. Individual judges' scores are never shown to teams.
+            </p>
+            <div class="relative mt-6 h-64">
+                <canvas id="scoreChart" aria-label="Average score per completed round" role="img"></canvas>
+            </div>
+        </div>
+        <div id="scoreBreakdown" class="space-y-5"></div>
+    </section>
+
+    <!-- Profile -->
+    <section id="profile" class="mx-auto hidden max-w-2xl">
+        <div class="rj-sheet p-6">
+            <h2 class="font-display text-3xl font-semibold leading-none" id="profileName"></h2>
+            <p class="mt-1 text-muted"><span id="profileUsername"></span>, team account</p>
+
+            <h3 class="mt-8 font-semibold">Change password</h3>
+            <form id="passwordForm" class="mt-3 space-y-4">
+                <div>
+                    <label for="pwCurrent" class="mb-1 block text-sm font-semibold">Current password</label>
+                    <input type="password" id="pwCurrent" required
+                           class="w-full rounded-md border border-rule px-3 py-2.5 focus:border-board focus:outline-none focus:ring-2 focus:ring-signal/40">
+                </div>
+                <div>
+                    <label for="pwNew" class="mb-1 block text-sm font-semibold">New password</label>
+                    <input type="password" id="pwNew" required minlength="5"
+                           class="w-full rounded-md border border-rule px-3 py-2.5 focus:border-board focus:outline-none focus:ring-2 focus:ring-signal/40">
+                    <p class="mt-1 text-sm text-muted">At least 5 characters.</p>
+                </div>
+                <div>
+                    <label for="pwConfirm" class="mb-1 block text-sm font-semibold">Confirm new password</label>
+                    <input type="password" id="pwConfirm" required
+                           class="w-full rounded-md border border-rule px-3 py-2.5 focus:border-board focus:outline-none focus:ring-2 focus:ring-signal/40">
+                </div>
+                <button type="submit"
+                        class="rounded-md bg-board px-5 py-2.5 font-semibold text-white hover:bg-[#0B1626]">
+                    Change password
+                </button>
+            </form>
+        </div>
+    </section>
+
+</div>
+
+<script src="permissions.js"></script>
+<script src="db.js"></script>
+<script src="ui.js"></script>
+<script>
+/**
+ * Team dashboard.
+ *
+ * A team sees ONLY its own aggregated results. Judge identities are never shown
+ * and are never even looked up here — real competitions don't attribute scores
+ * to individual judges, and doing so would invite teams to contest them.
+ */
+let session = null;
+let teamData = null;
+let shell = null;
+let chartLabels = [];
+let chartData = [];
+let scoreChartInstance = null;
+
+const PILL = {
+    completed: ["is-final", "Final"],
+    "in-progress": ["is-live", "Live"],
+    upcoming: ["is-upcoming", "Upcoming"]
+};
+
+function pill(status) {
+    const p = PILL[status] || PILL.upcoming;
+    return `<span class="rj-status ${p[0]}">${status === "in-progress" ? '<span class="rj-live-dot"></span>' : ""}${p[1]}</span>`;
+}
+
+function showSection(id) {
+    ["overview", "scores", "profile"].forEach(s => {
+        const el = document.getElementById(s);
+        if (el) el.classList.toggle("hidden", s !== id);
+    });
+
+    // The canvas has no size while its section is hidden, so Chart.js must be
+    // built (or resized) only once the Scores section is actually visible.
+    if (id === "scores") {
+        if (!scoreChartInstance) renderChart(chartLabels, chartData);
+        else scoreChartInstance.resize();
+    }
+}
+
+function renderOverview() {
+    const esc = UI.escape;
+    const rounds = DB.getRounds();
+    const criteria = DB.getCriteria();
+    const scores = DB.getScores({ teamId: teamData.id });
+
+    let roundsDone = 0;
+    let totalAvgSum = 0;
+    const judgeCount = new Set();
+    let rowsHtml = "";
+
+    const breakdown = document.getElementById("scoreBreakdown");
+    breakdown.innerHTML = "";
+    chartLabels = [];
+    chartData = [];
+
+    rounds.forEach((round, i) => {
+        const roundScores = scores.filter(s => s.roundId === round.id);
+        const section = document.createElement("div");
+        section.className = "rj-sheet rj-on-sheet p-6";
+
+        if (round.status !== "completed" || roundScores.length === 0) {
+            rowsHtml += `
+                <li class="rj-board-row ${round.status === "in-progress" ? "is-live" : ""}">
+                    <span class="rj-round-no">${i + 1}</span>
+                    <span class="min-w-0"><span class="rj-round-name block truncate">${esc(round.name)}</span>
+                        <span class="rj-round-meta">${round.status === "in-progress" ? "Being judged now" : "Not started"}</span></span>
+                    ${pill(round.status)}
+                </li>`;
+            section.innerHTML = `
+                <div class="flex items-center justify-between gap-3">
+                    <h3 class="font-display text-2xl font-semibold">${esc(round.name)}</h3>
+                    ${pill(round.status)}
+                </div>
+                <p class="mt-3 text-muted">Your results appear here once this round is complete.</p>`;
+            breakdown.appendChild(section);
+            return;
+        }
+
+        roundsDone++;
+        // Counted only to show how many judges evaluated the team. Identities are
+        // deliberately not read or displayed.
+        roundScores.forEach(s => judgeCount.add(s.judgeId));
+
+        const avgs = {};
+        criteria.forEach(c => {
+            const vals = roundScores.map(s => s.criteria[c] || 0);
+            avgs[c] = (vals.reduce((a, b) => a + b, 0) / vals.length).toFixed(1);
+        });
+        const totalAvg = (Object.values(avgs).reduce((a, b) => a + parseFloat(b), 0) / criteria.length).toFixed(1);
+        totalAvgSum += parseFloat(totalAvg);
+
+        chartLabels.push(round.name);
+        chartData.push(parseFloat(totalAvg));
+
+        rowsHtml += `
+            <li class="rj-board-row">
+                <span class="rj-round-no">${i + 1}</span>
+                <span class="min-w-0"><span class="rj-round-name block truncate">${esc(round.name)}</span>
+                    <span class="rj-round-meta">Averaged over ${roundScores.length} judge${roundScores.length === 1 ? "" : "s"}</span></span>
+                <span class="rj-digits text-3xl text-white">${totalAvg}</span>
+            </li>`;
+
+        section.innerHTML = `
+            <div class="flex flex-wrap items-end justify-between gap-3">
+                <div>
+                    <h3 class="font-display text-2xl font-semibold">${esc(round.name)}</h3>
+                    <p class="text-sm text-muted">Averaged over ${roundScores.length} judge${roundScores.length === 1 ? "" : "s"}</p>
+                </div>
+                <p class="text-right"><span class="rj-digits text-5xl">${totalAvg}</span>
+                    <span class="text-muted">out of 10</span></p>
+            </div>
+
+            <div class="mt-5 space-y-3">
+                ${criteria.map(c => `
+                    <div class="grid grid-cols-[7.5rem_1fr_2.5rem] items-center gap-3 sm:grid-cols-[9rem_1fr_3rem]">
+                        <span class="font-semibold">${esc(c)}</span>
+                        <div class="h-2 overflow-hidden rounded-sm bg-rule-soft">
+                            <div class="h-full bg-board" style="width: ${avgs[c] * 10}%"></div>
+                        </div>
+                        <span class="rj-digits text-right text-2xl">${avgs[c]}</span>
+                    </div>`).join("")}
+            </div>`;
+        breakdown.appendChild(section);
+    });
+
+    const overallAvg = roundsDone > 0 ? (totalAvgSum / roundsDone).toFixed(1) : "–";
+
+    document.getElementById("teamBoard").innerHTML = `
+        <div class="rj-board p-5 sm:p-7">
+            <div class="flex flex-wrap items-start justify-between gap-6">
+                <div class="min-w-0">
+                    <p class="rj-digits text-2xl text-board-muted">${esc(teamData.id)}</p>
+                    <h2 class="mt-1 font-display text-4xl font-semibold leading-none text-white sm:text-5xl">${esc(teamData.name)}</h2>
+                    <p class="mt-2 text-board-muted">${esc(teamData.university)}, ${esc(teamData.category)}</p>
+                </div>
+                <div class="text-right">
+                    <p class="text-sm text-board-muted">Overall average</p>
+                    <p class="rj-digits text-7xl text-white">${overallAvg}</p>
+                </div>
+            </div>
+
+            <dl class="mt-6 grid grid-cols-2 gap-2">
+                <div class="rounded-md bg-board-2 px-4 py-3">
+                    <dt class="text-sm text-board-muted">Rounds completed</dt>
+                    <dd class="rj-digits mt-1 text-4xl text-white">${roundsDone}<span class="text-board-muted"> / ${rounds.length}</span></dd>
+                </div>
+                <div class="rounded-md bg-board-2 px-4 py-3">
+                    <dt class="text-sm text-board-muted">Judges who scored you</dt>
+                    <dd class="rj-digits mt-1 text-4xl text-white">${judgeCount.size}</dd>
+                </div>
+            </dl>
+
+            <h3 class="mt-7 mb-3 font-display text-2xl font-semibold text-white">Your rounds</h3>
+            <ul class="rj-board-rows">${rowsHtml || `<li class="rj-board-row"><span></span><span class="rj-round-meta">No rounds scheduled yet.</span><span></span></li>`}</ul>
+        </div>`;
+}
+
+function renderChart(labels, data) {
+    const ctx = document.getElementById("scoreChart").getContext("2d");
+    if (scoreChartInstance) scoreChartInstance.destroy();
+    Chart.defaults.font.family = "Barlow, system-ui, sans-serif";
+    Chart.defaults.color = "#5A6676";
+    scoreChartInstance = new Chart(ctx, {
+        type: "bar",
+        data: {
+            labels: labels,
+            datasets: [{
+                label: "Average score out of 10",
+                data: data,
+                backgroundColor: "#13233A",
+                borderRadius: 3,
+                maxBarThickness: 72
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: { legend: { display: false } },
+            scales: {
+                y: { beginAtZero: true, max: 10, grid: { color: "#E3E8EE" }, border: { display: false } },
+                x: { grid: { display: false } }
+            }
+        }
+    });
+}
+
+function submitPasswordChange(e) {
+    e.preventDefault();
+    const current = document.getElementById("pwCurrent").value;
+    const next = document.getElementById("pwNew").value;
+    if (next !== document.getElementById("pwConfirm").value) {
+        UI.toast("The new passwords don't match. Type the same password in both boxes.", "error");
+        return;
+    }
+    const result = DB.changePassword(session.userId, current, next);
+    if (!result.ok) { UI.toast(result.error, "error"); return; }
+    e.target.reset();
+    UI.toast("Password changed.", "success");
+}
+
+document.addEventListener("DOMContentLoaded", function () {
+    DB.init();
+    session = DB.requireAuth(["team"]);
+    if (!session) return;
+
+    teamData = DB.getTeamById(session.teamId);
+    if (!teamData) {
+        UI.toast("Your team record is missing. Ask the competition admin to re-add your team.", "error");
+        return;
+    }
+
+    shell = UI.mountShell({ active: "overview", onSelect: showSection });
+
+    document.getElementById("profileName").textContent = session.name;
+    document.getElementById("profileUsername").textContent = session.username;
+    document.getElementById("passwordForm").addEventListener("submit", submitPasswordChange);
+
+    renderOverview();
+    showSection("overview");
+});
+</script>
+</body>
+</html>
