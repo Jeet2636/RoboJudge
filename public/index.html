@@ -1,0 +1,208 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <!-- Practical 3.I — viewport meta tag for responsiveness -->
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>RoboJudge — Live judging for robotics competitions</title>
+
+    <!-- Practical 6 — Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['Barlow', 'system-ui', 'sans-serif'],
+                        display: ['"Barlow Condensed"', 'Barlow', 'sans-serif']
+                    },
+                    colors: {
+                        floor: '#F2F4F6', board: { DEFAULT: '#13233A', 2: '#1C3150', muted: '#8FA0B5' },
+                        signal: '#FFB000', rule: { DEFAULT: '#CBD3DC', soft: '#E3E8EE' },
+                        ink: '#13233A', muted: '#5A6676', final: '#1E8A5A'
+                    }
+                }
+            }
+        };
+    </script>
+    <link href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600;700&family=Barlow+Condensed:wght@500;600;700&display=swap" rel="stylesheet">
+    <link href="theme.css" rel="stylesheet">
+</head>
+<body class="font-sans bg-floor text-ink antialiased">
+
+    <!-- Header (shared shell — adapts if you're already signed in) -->
+    <header id="publicNav"></header>
+
+    <!-- Hero: the competition's round board -->
+    <section class="mx-auto max-w-6xl px-4 sm:px-6 lg:px-8 pt-12 pb-16 sm:pt-16 sm:pb-20">
+        <div class="grid grid-cols-1 items-center gap-10 md:grid-cols-[1.05fr_1fr] lg:gap-16">
+
+            <div>
+                <!-- Practical 3.III — responsive text sizing with vw -->
+                <h1 class="font-display font-semibold leading-[0.95] tracking-tight text-[11vw] sm:text-6xl lg:text-7xl">
+                    Live judging for robotics competitions
+                </h1>
+                <p class="mt-6 max-w-[52ch] text-lg leading-relaxed text-muted">
+                    Judges check in at the venue and score the round that is running.
+                    Teams see their averaged results the moment a round closes.
+                </p>
+                <div class="mt-8 flex flex-col gap-3 sm:flex-row">
+                    <a href="login.html"
+                       class="rounded-md bg-board px-6 py-3 text-center font-semibold text-white hover:bg-[#0B1626]">
+                        Sign in
+                    </a>
+                    <a href="register.html"
+                       class="rounded-md border border-rule px-6 py-3 text-center font-semibold text-ink hover:bg-rule-soft">
+                        Register as a participant
+                    </a>
+                </div>
+            </div>
+
+            <div class="rj-board overflow-hidden">
+                <!-- Practical 3.II — image swaps with browser width -->
+                <picture class="mx-auto mt-4 block max-w-[200px] overflow-hidden rounded-md md:mt-0 md:max-w-none md:rounded-none">
+                    <source srcset="robojudge-logo.png" media="(max-width: 768px)">
+                    <img src="robojudge-banner.png" alt="RoboJudge, robotics competition platform"
+                         class="block w-full aspect-square md:aspect-[7/2.4] object-cover scale-[1.3] md:scale-[1.02]">
+                </picture>
+                <div class="px-4 pb-4 sm:px-5 sm:pb-5">
+                    <div class="mb-3 flex items-baseline justify-between gap-3">
+                        <h2 class="font-display text-2xl font-semibold text-white">Rounds</h2>
+                        <span class="text-sm text-board-muted" id="boardYear"></span>
+                    </div>
+                    <ul class="rj-board-rows" id="roundBoard"></ul>
+                    <dl class="mt-4 grid grid-cols-2 gap-2">
+                        <div class="rounded-md bg-board-2 px-4 py-3">
+                            <dt class="text-sm text-board-muted">Teams competing</dt>
+                            <dd class="rj-digits mt-1 text-4xl text-white" id="teamCount">0</dd>
+                        </div>
+                        <div class="rounded-md bg-board-2 px-4 py-3">
+                            <dt class="text-sm text-board-muted">Judges on the panel</dt>
+                            <dd class="rj-digits mt-1 text-4xl text-white" id="judgeCount">0</dd>
+                        </div>
+                    </dl>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- How judging works (Practical 3.IV — breakpoints) -->
+    <section class="border-t border-rule">
+        <div class="mx-auto max-w-6xl px-4 sm:px-6 lg:px-8 py-14 sm:py-16">
+            <h2 class="font-display text-4xl font-semibold">How a round is judged</h2>
+            <ol class="mt-8 grid grid-cols-1 gap-x-10 gap-y-8 md:grid-cols-3">
+                <li class="border-t-2 border-ink pt-4">
+                    <span class="rj-digits block text-5xl text-ink">1</span>
+                    <h3 class="mt-3 text-lg font-semibold">Judges check in at the venue</h3>
+                    <p class="mt-1 max-w-[40ch] text-muted">
+                        Scoring stays locked until the judge's location is inside the venue radius.
+                    </p>
+                </li>
+                <li class="border-t-2 border-ink pt-4">
+                    <span class="rj-digits block text-5xl text-ink">2</span>
+                    <h3 class="mt-3 text-lg font-semibold">Each judge scores the live round</h3>
+                    <p class="mt-1 max-w-[40ch] text-muted">
+                        Autonomy, design and documentation, out of 10. Drafts save as you go.
+                    </p>
+                </li>
+                <li class="border-t-2 border-ink pt-4">
+                    <span class="rj-digits block text-5xl text-ink">3</span>
+                    <h3 class="mt-3 text-lg font-semibold">Teams get their averages</h3>
+                    <p class="mt-1 max-w-[40ch] text-muted">
+                        Results are averaged across the panel. No team sees which judge gave what.
+                    </p>
+                </li>
+            </ol>
+        </div>
+    </section>
+
+    <!-- Registered teams (live from the database) -->
+    <section class="border-t border-rule bg-white">
+        <div class="mx-auto max-w-6xl px-4 sm:px-6 lg:px-8 py-14 sm:py-16">
+            <h2 class="font-display text-4xl font-semibold">Entry list</h2>
+            <p class="mt-1 text-muted">Every team registered for RoboJudge <span id="entryYear"></span>.</p>
+            <div id="teamsGrid" class="mt-8 divide-y divide-rule-soft border-y border-rule"></div>
+        </div>
+    </section>
+
+    <!-- Footer (shared shell) -->
+    <footer id="siteFooter"></footer>
+
+    <script src="permissions.js"></script>
+    <script src="db.js"></script>
+    <script src="ui.js"></script>
+    <script>
+        UI.mountPublicNav("publicNav");
+        UI.mountFooter("siteFooter");
+    </script>
+    <script>
+        // Board and entry list are read from the shared database, so anything the admin changes shows up here.
+        (function renderBoard() {
+            var esc = UI.escape;
+            var rounds = DB.getRounds();
+            var year = String(new Date().getFullYear());
+            document.getElementById("boardYear").textContent = year;
+            document.getElementById("entryYear").textContent = year;
+            document.getElementById("teamCount").textContent = DB.getTeams().length;
+            document.getElementById("judgeCount").textContent = DB.getJudges().length;
+
+            var STATUS = {
+                "in-progress": { cls: "is-live", text: "Live" },
+                completed: { cls: "is-final", text: "Final" },
+                upcoming: { cls: "is-upcoming", text: "Upcoming" }
+            };
+
+            document.getElementById("roundBoard").innerHTML = rounds.length === 0
+                ? '<li class="rj-board-row"><span></span><span class="rj-round-meta">No rounds scheduled yet.</span><span></span></li>'
+                : rounds.map(function (r, i) {
+                    var s = STATUS[r.status] || STATUS.upcoming;
+                    var date = r.date ? new Date(r.date + "T00:00:00")
+                        .toLocaleDateString("en-IN", { day: "numeric", month: "short" }) : "Date to be set";
+                    return '<li class="rj-board-row ' + (r.status === "in-progress" ? "is-live" : "") + '">' +
+                        '<span class="rj-round-no">' + (i + 1) + '</span>' +
+                        '<span class="min-w-0"><span class="rj-round-name block truncate">' + esc(r.name) + '</span>' +
+                        '<span class="rj-round-meta">' + esc(date) + '</span></span>' +
+                        '<span class="rj-status ' + s.cls + '">' +
+                        (r.status === "in-progress" ? '<span class="rj-live-dot"></span>' : "") + s.text + '</span>' +
+                        '</li>';
+                }).join("");
+        })();
+
+        (function renderTeams() {
+            var grid = document.getElementById("teamsGrid");
+            var teams = DB.getTeams();
+
+            if (teams.length === 0) {
+                grid.className = "mt-8 rj-empty";
+                grid.textContent = "No teams have registered yet.";
+                return;
+            }
+
+            teams.forEach(function (t) {
+                var row = document.createElement("div");
+                row.className = "grid grid-cols-[4.5rem_1fr] gap-x-4 gap-y-1 py-4 sm:grid-cols-[5rem_1.3fr_1fr_1fr] sm:items-baseline";
+
+                var id = document.createElement("span");
+                id.className = "rj-digits text-2xl text-muted sm:row-auto row-span-2";
+                id.textContent = t.id;
+
+                var name = document.createElement("span");
+                name.className = "font-display text-2xl font-semibold leading-tight";
+                name.textContent = t.name;
+
+                var uni = document.createElement("span");
+                uni.className = "text-muted";
+                uni.textContent = t.university;
+
+                var cat = document.createElement("span");
+                cat.className = "hidden text-muted sm:block";
+                cat.textContent = t.category;
+
+                row.append(id, name, uni, cat);
+                grid.appendChild(row);
+            });
+        })();
+    </script>
+
+</body>
+</html>
