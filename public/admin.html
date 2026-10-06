@@ -1,0 +1,986 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>RoboJudge — Admin Console</title>
+
+    <!-- Practical 5.II — Bootstrap 5 served OFFLINE from local files -->
+    <!-- No CDN here: everything under vendor/ ships with the project, so this  -->
+    <!-- console stays fully styled with the network disconnected.              -->
+    <link href="vendor/bootstrap/bootstrap.min.css" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600;700&family=Barlow+Condensed:wght@500;600;700&display=swap" rel="stylesheet">
+    <link href="theme.css" rel="stylesheet">
+
+    <style>
+        .section-title { font-family: var(--rj-display); font-weight: 600; font-size: 1.6rem; line-height: 1.1; margin: 0; }
+        .section-head { display: flex; flex-wrap: wrap; gap: .75rem; align-items: flex-end; justify-content: space-between; margin-bottom: 1rem; }
+        .section-head .rj-lede { margin-top: .25rem; }
+        .toolbar { display: flex; gap: .5rem; flex-wrap: wrap; }
+        .toolbar .form-control { width: 220px; }
+
+        /* Team and judge rosters: rows, not cards */
+        .roster { list-style: none; margin: 0; padding: 0; }
+        .roster li {
+            display: grid; grid-template-columns: 4.5rem minmax(0, 1fr) auto; gap: .25rem 1rem;
+            align-items: center; padding: .9rem 0; border-bottom: 1px solid var(--rj-rule-soft);
+        }
+        .roster li:last-child { border-bottom: 0; }
+        .roster .tag { font-family: var(--rj-display); font-variant-numeric: tabular-nums; font-weight: 600; font-size: 1.35rem; color: var(--rj-muted); }
+        .roster .name { font-family: var(--rj-display); font-weight: 600; font-size: 1.3rem; line-height: 1.1; }
+        .roster .meta { color: var(--rj-muted); font-size: .9rem; }
+
+        /* Schedule: the round board, with drag handles (Practical 4.III) */
+        .drag-list { list-style: none; padding: 6px; margin: 0; display: grid; gap: 2px; }
+        .drag-list li {
+            display: grid; grid-template-columns: 1.2rem 2.4rem minmax(0, 1fr) auto; gap: .8rem;
+            align-items: center; padding: .75rem .9rem; background: var(--rj-board-2);
+            color: var(--rj-board-text); cursor: grab;
+        }
+        .drag-list li:first-child { border-radius: var(--rj-radius) var(--rj-radius) 0 0; }
+        .drag-list li:last-child { border-radius: 0 0 var(--rj-radius) var(--rj-radius); }
+        .drag-list li.is-live { box-shadow: inset 4px 0 0 var(--rj-signal); }
+        .drag-list li.is-live .round-no { color: var(--rj-signal); }
+        .drag-list li.dragging { opacity: .45; }
+        .drag-list li.drag-over { outline: 2px dashed var(--rj-signal); outline-offset: -2px; }
+        .drag-handle { color: var(--rj-board-muted); cursor: grab; line-height: 0; }
+        .round-no { font-family: var(--rj-display); font-variant-numeric: tabular-nums; font-weight: 600; font-size: 1.8rem; color: var(--rj-board-muted); text-align: center; line-height: 1; }
+        .round-info { display: flex; flex-direction: column; min-width: 0; }
+        .round-name { font-family: var(--rj-display); font-weight: 600; font-size: 1.3rem; color: #fff; line-height: 1.1; }
+        .round-meta { font-size: .82rem; color: var(--rj-board-muted); }
+        .round-meta .grant { color: var(--rj-signal); }
+        .round-right { display: flex; align-items: center; gap: .4rem; flex-wrap: wrap; justify-content: flex-end; }
+        .round-right .form-select { background-color: var(--rj-board); color: #fff; border-color: rgba(255,255,255,.18); }
+        .round-right .btn-board { color: var(--rj-board-text); border: 1px solid rgba(255,255,255,.18); }
+        .round-right .btn-board:hover { background: var(--rj-board); color: #fff; }
+        .round-right .btn-remove { color: #FF8A80; border: 0; }
+        .round-right .btn-remove:hover { background: var(--rj-danger); color: #fff; }
+        #roundOrder { color: var(--rj-muted); }
+        @media (max-width: 767.98px) {
+            .drag-list li { grid-template-columns: 1.2rem 2rem minmax(0, 1fr); }
+            .round-right { grid-column: 1 / -1; justify-content: flex-start; }
+        }
+
+        /* Leaderboard: the scoreboard */
+        .scoreboard { padding: 6px; }
+        .scoreboard table { width: 100%; border-collapse: separate; border-spacing: 0 2px; color: var(--rj-board-text); }
+        .scoreboard th { font-weight: 500; font-size: .82rem; color: var(--rj-board-muted); padding: .5rem .9rem; }
+        .scoreboard td { background: var(--rj-board-2); padding: .8rem .9rem; vertical-align: middle; }
+        .scoreboard tr td:first-child { border-radius: var(--rj-radius) 0 0 var(--rj-radius); }
+        .scoreboard tr td:last-child { border-radius: 0 var(--rj-radius) var(--rj-radius) 0; }
+        .scoreboard .rank { font-family: var(--rj-display); font-variant-numeric: tabular-nums; font-weight: 600; font-size: 2rem; line-height: 1; color: var(--rj-board-muted); width: 3.5rem; }
+        .scoreboard tr.leader .rank { color: var(--rj-signal); }
+        .scoreboard .team { font-family: var(--rj-display); font-weight: 600; font-size: 1.3rem; color: #fff; line-height: 1.1; }
+        .scoreboard .sub { font-size: .82rem; color: var(--rj-board-muted); }
+        .scoreboard .num { font-family: var(--rj-display); font-variant-numeric: tabular-nums; font-weight: 600; font-size: 1.25rem; text-align: center; }
+        .scoreboard .avg { font-size: 2rem; color: #fff; }
+
+        /* Judge progress */
+        .progress { height: 6px; background: var(--rj-rule-soft); }
+        .progress-bar { background: var(--rj-board); }
+        .progress-cell { text-align: center; }
+        .done-mark { color: var(--rj-final); font-weight: 700; }
+        .round-title { font-family: var(--rj-display); font-weight: 600; font-size: 1.35rem; margin: 0; }
+
+        .log-action { font-size: .78rem; color: var(--rj-muted); min-width: 9rem; }
+    </style>
+</head>
+<body>
+
+<div id="rjShell"></div>
+
+<div id="rjSections">
+
+    <!-- Teams -->
+    <section id="teams">
+        <div class="rj-sheet"><div class="p-4">
+            <div class="section-head">
+                <div>
+                    <h2 class="section-title">Teams</h2>
+                    <p class="rj-lede">Each team gets its own sign-in when you add it.</p>
+                </div>
+                <div class="toolbar">
+                    <input type="search" id="teamSearch" class="form-control" placeholder="Search teams" aria-label="Search teams">
+                    <button class="btn btn-primary text-nowrap" data-bs-toggle="modal" data-bs-target="#addTeamModal">Add team</button>
+                </div>
+            </div>
+            <div id="teamCredsAlert" class="alert alert-success d-none" role="alert"></div>
+            <ul id="teamsList" class="roster"></ul>
+        </div></div>
+    </section>
+
+    <!-- Judges -->
+    <section id="judges">
+        <div class="rj-sheet"><div class="p-4">
+            <div class="section-head">
+                <div>
+                    <h2 class="section-title">Judging panel</h2>
+                    <p class="rj-lede">Removing a judge also removes every score they submitted.</p>
+                </div>
+                <div class="toolbar">
+                    <input type="search" id="judgeSearch" class="form-control" placeholder="Search judges" aria-label="Search judges">
+                    <button class="btn btn-primary text-nowrap" data-bs-toggle="modal" data-bs-target="#addJudgeModal">Add judge</button>
+                </div>
+            </div>
+            <ul id="judgesList" class="roster"></ul>
+        </div></div>
+    </section>
+
+    <!-- Schedule (Practical 4.III — Drag and Drop API) -->
+    <section id="schedule">
+        <div class="rj-sheet"><div class="p-4">
+            <div class="section-head">
+                <div>
+                    <h2 class="section-title">Round order</h2>
+                    <p class="rj-lede">
+                        Drag rounds to reorder them. Judges can score only the round set to In progress.
+                        Use Access to let a judge into a locked round.
+                    </p>
+                </div>
+                <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#addRoundModal">Add round</button>
+            </div>
+            <div class="rj-board"><ul id="roundList" class="drag-list"></ul></div>
+            <p id="roundOrder" class="small mb-0 mt-3"></p>
+        </div></div>
+    </section>
+
+    <!-- Participants -->
+    <section id="participants">
+        <div class="rj-sheet"><div class="p-4">
+            <div class="section-head">
+                <div>
+                    <h2 class="section-title">Participants</h2>
+                    <p class="rj-lede">Everyone who signed up through the registration page.</p>
+                </div>
+                <div class="toolbar">
+                    <input type="search" id="participantSearch" class="form-control" placeholder="Search participants" aria-label="Search participants">
+                    <a href="register.html" class="btn btn-outline-primary text-nowrap">Open registration form</a>
+                </div>
+            </div>
+            <div id="participantsContent"></div>
+        </div></div>
+    </section>
+
+    <!-- All Scores -->
+    <section id="allscores">
+        <div class="rj-sheet"><div class="p-4">
+            <div class="section-head">
+                <div>
+                    <h2 class="section-title">Every score</h2>
+                    <p class="rj-lede">Each judge's score for each team, with who gave it. Only admins can see this.</p>
+                </div>
+                <button class="btn btn-outline-primary" onclick="exportScores()">Export as CSV</button>
+            </div>
+            <div id="allScoresContent"></div>
+        </div></div>
+    </section>
+
+    <!-- Leaderboard -->
+    <section id="leaderboard">
+        <div class="rj-sheet"><div class="p-4">
+            <div class="section-head">
+                <div>
+                    <h2 class="section-title">Standings</h2>
+                    <p class="rj-lede">
+                        Averaged across the judging panel. Only admins see this: judges don't see live
+                        standings, and teams never see rankings.
+                    </p>
+                </div>
+            </div>
+            <div id="leaderboardContent"></div>
+        </div></div>
+    </section>
+
+    <!-- Judge Progress -->
+    <section id="progress">
+        <div class="rj-sheet"><div class="p-4">
+            <div class="section-head">
+                <div>
+                    <h2 class="section-title">Scores still to come</h2>
+                    <p class="rj-lede">Which judges have scored which teams, round by round.</p>
+                </div>
+            </div>
+            <div id="progressContent"></div>
+        </div></div>
+    </section>
+
+    <!-- Settings -->
+    <section id="settings">
+        <div class="rj-sheet"><div class="p-4">
+            <h2 class="section-title">Venue</h2>
+            <p class="rj-lede mb-4">Judges must be inside this radius before they can score.</p>
+            <div class="row g-3">
+                <div class="col-md-6">
+                    <label for="venueLat" class="form-label">Latitude</label>
+                    <input type="text" class="form-control" id="venueLat" placeholder="e.g. 23.0305">
+                </div>
+                <div class="col-md-6">
+                    <label for="venueLng" class="form-label">Longitude</label>
+                    <input type="text" class="form-control" id="venueLng" placeholder="e.g. 72.5401">
+                </div>
+                <div class="col-md-6">
+                    <label for="venueRadius" class="form-label">Allowed radius (km)</label>
+                    <input type="number" class="form-control" id="venueRadius" step="0.5" placeholder="e.g. 3">
+                </div>
+                <div class="col-12 d-flex flex-wrap gap-2 align-items-center">
+                    <button class="btn btn-primary" onclick="updateVenue()">Save venue</button>
+                    <button class="btn btn-outline-primary" id="useMyLocationBtn" onclick="useMyLocation()">
+                        Use my current location
+                    </button>
+                    <span id="venueHint" class="text-body-secondary small"></span>
+                </div>
+            </div>
+        </div></div>
+
+        <div class="rj-sheet mt-4"><div class="p-4">
+            <h2 class="section-title">Server database</h2>
+            <p class="rj-lede mb-3">
+                Teams in MySQL, scores and the activity log in MongoDB, behind the Express API.
+                The server has to be running (<code>npm start</code>).
+            </p>
+            <a class="btn btn-outline-primary" href="server.html">Open server console (MySQL + MongoDB)</a>
+        </div></div>
+    </section>
+
+    <!-- Activity Log -->
+    <section id="logs">
+        <div class="rj-sheet"><div class="p-4">
+            <h2 class="section-title">Activity</h2>
+            <p class="rj-lede mb-3">The last 100 changes, newest first.</p>
+            <div id="logsContent"></div>
+        </div></div>
+    </section>
+
+    <!-- Profile -->
+    <section id="profile">
+        <div class="rj-sheet" style="max-width:640px"><div class="p-4">
+            <h2 class="section-title" id="profileName"></h2>
+            <p class="text-body-secondary mb-4"><span id="profileUsername"></span>, competition admin</p>
+            <h3 class="h6 fw-semibold mb-3">Change password</h3>
+            <form id="passwordForm">
+                <div class="mb-3">
+                    <label for="pwCurrent" class="form-label">Current password</label>
+                    <input type="password" class="form-control" id="pwCurrent" required>
+                </div>
+                <div class="mb-3">
+                    <label for="pwNew" class="form-label">New password</label>
+                    <input type="password" class="form-control" id="pwNew" required minlength="5">
+                    <div class="form-text">At least 5 characters.</div>
+                </div>
+                <div class="mb-3">
+                    <label for="pwConfirm" class="form-label">Confirm new password</label>
+                    <input type="password" class="form-control" id="pwConfirm" required>
+                </div>
+                <button type="submit" class="btn btn-primary">Change password</button>
+            </form>
+        </div></div>
+    </section>
+
+</div>
+
+<!-- Bootstrap modals -->
+
+<div class="modal fade" id="addTeamModal" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered"><div class="modal-content">
+        <div class="modal-header"><h5 class="modal-title">Add a team</h5>
+            <button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+        <div class="modal-body"><div class="row g-3">
+            <div class="col-md-6"><label class="form-label">Team ID</label>
+                <input type="text" class="form-control" id="newTeamId" placeholder="e.g. T003"></div>
+            <div class="col-md-6"><label class="form-label">Team Name</label>
+                <input type="text" class="form-control" id="newTeamName" placeholder="e.g. Team Hydra"></div>
+            <div class="col-md-6"><label class="form-label">University</label>
+                <input type="text" class="form-control" id="newTeamUni" placeholder="e.g. IIT Bombay"></div>
+            <div class="col-md-6"><label class="form-label">Category</label>
+                <input type="text" class="form-control" id="newTeamCat" placeholder="e.g. AUV"></div>
+        </div></div>
+        <div class="modal-footer">
+            <button class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+            <button class="btn btn-primary" onclick="addTeam()">Add team</button>
+        </div>
+    </div></div>
+</div>
+
+<div class="modal fade" id="addJudgeModal" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered"><div class="modal-content">
+        <div class="modal-header"><h5 class="modal-title">Add a judge</h5>
+            <button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+        <div class="modal-body"><div class="row g-3">
+            <div class="col-12"><label class="form-label">Full Name</label>
+                <input type="text" class="form-control" id="newJudgeName" placeholder="e.g. Dr. Gupta"></div>
+            <div class="col-md-6"><label class="form-label">Username</label>
+                <input type="text" class="form-control" id="newJudgeUser" placeholder="e.g. gupta"></div>
+            <div class="col-md-6"><label class="form-label">Password</label>
+                <input type="text" class="form-control" id="newJudgePass" placeholder="e.g. judge123"></div>
+        </div></div>
+        <div class="modal-footer">
+            <button class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+            <button class="btn btn-primary" onclick="addJudge()">Add judge</button>
+        </div>
+    </div></div>
+</div>
+
+<div class="modal fade" id="addRoundModal" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered"><div class="modal-content">
+        <div class="modal-header"><h5 class="modal-title">Add a round</h5>
+            <button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+        <div class="modal-body"><div class="row g-3">
+            <div class="col-12"><label class="form-label">Round Name</label>
+                <input type="text" class="form-control" id="newRoundName" placeholder="e.g. Quarter Finals"></div>
+            <div class="col-md-6"><label class="form-label">Date</label>
+                <input type="date" class="form-control" id="newRoundDate"></div>
+            <div class="col-md-6"><label class="form-label">Status</label>
+                <select class="form-select" id="newRoundStatus">
+                    <option value="upcoming">Upcoming</option>
+                    <option value="in-progress">In Progress</option>
+                    <option value="completed">Completed</option>
+                </select></div>
+        </div></div>
+        <div class="modal-footer">
+            <button class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+            <button class="btn btn-primary" onclick="addRound()">Add round</button>
+        </div>
+    </div></div>
+</div>
+
+<!-- Round access grants (round locking) -->
+<div class="modal fade" id="accessModal" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered"><div class="modal-content">
+        <div class="modal-header"><h5 class="modal-title">Scoring access for <span id="accessRoundName"></span></h5>
+            <button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+        <div class="modal-body">
+            <p class="text-body-secondary small" id="accessHint"></p>
+            <div id="accessJudgeList"></div>
+        </div>
+        <div class="modal-footer">
+            <button class="btn btn-primary" data-bs-dismiss="modal">Done</button>
+        </div>
+    </div></div>
+</div>
+
+<script src="vendor/bootstrap/bootstrap.bundle.min.js"></script>
+<script src="permissions.js"></script>
+<script src="db.js"></script>
+<script src="ui.js"></script>
+<script>
+/** RoboJudge admin console. Every mutating action re-checks its permission. */
+
+let session = null;
+let shell = null;
+
+// Section id -> renderer. Only the section being shown is re-rendered, so
+// in-progress edits elsewhere (e.g. the venue fields) are never clobbered.
+const RENDERERS = {
+    teams: renderTeams,
+    judges: renderJudges,
+    schedule: renderRounds,
+    participants: renderParticipants,
+    allscores: renderAllScores,
+    leaderboard: renderLeaderboard,
+    progress: renderProgress,
+    settings: renderSettings,
+    logs: renderLogs,
+    profile: function () {}
+};
+
+function showSection(id) {
+    Object.keys(RENDERERS).forEach(s => {
+        const el = document.getElementById(s);
+        if (el) el.classList.toggle("d-none", s !== id);
+    });
+    if (RENDERERS[id]) RENDERERS[id]();
+}
+
+function closeModal(id) {
+    const inst = bootstrap.Modal.getInstance(document.getElementById(id));
+    if (inst) inst.hide();
+}
+
+function formatDate(dateStr) {
+    if (!dateStr) return "";
+    return new Date(dateStr + "T00:00:00")
+        .toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" });
+}
+
+/** Filter helper shared by the search boxes. */
+function matches(needle, ...haystack) {
+    const q = (needle || "").trim().toLowerCase();
+    if (!q) return true;
+    return haystack.join(" ").toLowerCase().includes(q);
+}
+
+// Teams
+
+function renderTeams() {
+    const q = document.getElementById("teamSearch").value;
+    const teams = DB.getTeams().filter(t => matches(q, t.id, t.name, t.university, t.category));
+    const esc = UI.escape;
+
+    document.getElementById("teamsList").innerHTML = teams.length === 0
+        ? `<li class="d-block border-0">${UI.empty(q ? "No teams match that search." : "No teams yet. Add the first one to get started.")}</li>`
+        : teams.map(t => `
+            <li>
+                <span class="tag">${esc(t.id)}</span>
+                <div class="min-w-0">
+                    <div class="name">${esc(t.name)}</div>
+                    <div class="meta">${esc(t.university)}, ${esc(t.category)}</div>
+                </div>
+                <button class="btn btn-outline-danger btn-sm" onclick="removeTeam('${esc(t.id)}')">Remove</button>
+            </li>`).join("");
+}
+
+function addTeam() {
+    DB.requirePermission(ACTIONS.MANAGE_TEAMS);
+    const id = document.getElementById("newTeamId").value.trim();
+    const name = document.getElementById("newTeamName").value.trim();
+    const uni = document.getElementById("newTeamUni").value.trim();
+    const cat = document.getElementById("newTeamCat").value.trim();
+
+    if (!id || !name || !uni || !cat) { UI.toast("Please fill in all fields.", "error"); return; }
+    if (DB.getTeams().some(t => t.id === id)) { UI.toast("That Team ID already exists.", "error"); return; }
+
+    const creds = DB.addTeam({
+        id, name, university: uni, category: cat,
+        registeredOn: new Date().toISOString().split("T")[0]
+    });
+
+    const box = document.getElementById("teamCredsAlert");
+    box.innerHTML = `Team <strong>${UI.escape(name)}</strong> added. They sign in with username
+        <code>${UI.escape(creds.username)}</code> and password <code>${UI.escape(creds.password)}</code>.
+        Share these with the team.`;
+    box.classList.remove("d-none");
+
+    ["newTeamId", "newTeamName", "newTeamUni", "newTeamCat"]
+        .forEach(f => document.getElementById(f).value = "");
+    closeModal("addTeamModal");
+    renderTeams();
+    UI.toast(`Team "${name}" registered.`, "success");
+}
+
+async function removeTeam(id) {
+    DB.requirePermission(ACTIONS.MANAGE_TEAMS);
+    const team = DB.getTeamById(id);
+    if (!await UI.confirm(
+        `This removes "${team ? team.name : id}", their login, their participants and all of their scores. This cannot be undone.`,
+        { title: "Remove team?", confirmText: "Remove team" })) return;
+    DB.removeTeam(id);
+    renderTeams();
+    UI.toast("Team removed.", "info");
+}
+
+// Judges
+
+function renderJudges() {
+    const q = document.getElementById("judgeSearch").value;
+    const scores = DB.getScores();
+    const judges = DB.getJudges().filter(j => matches(q, j.name, j.username));
+    const esc = UI.escape;
+
+    document.getElementById("judgesList").innerHTML = judges.length === 0
+        ? `<li class="d-block border-0">${UI.empty(q ? "No judges match that search." : "No judges yet. Add one so scoring can start.")}</li>`
+        : judges.map(j => {
+            const count = scores.filter(s => s.judgeId === j.id).length;
+            return `<li>
+                <span class="tag">${count}</span>
+                <div class="min-w-0">
+                    <div class="name">${esc(j.name)}</div>
+                    <div class="meta">Signs in as ${esc(j.username)}, ${count} score${count === 1 ? "" : "s"} submitted</div>
+                </div>
+                <button class="btn btn-outline-danger btn-sm" onclick="removeJudge('${esc(j.id)}')">Remove</button>
+            </li>`;
+        }).join("");
+}
+
+function addJudge() {
+    DB.requirePermission(ACTIONS.MANAGE_JUDGES);
+    const name = document.getElementById("newJudgeName").value.trim();
+    const username = document.getElementById("newJudgeUser").value.trim();
+    const password = document.getElementById("newJudgePass").value.trim();
+
+    if (!name || !username || !password) { UI.toast("Please fill in all fields.", "error"); return; }
+    if (DB.getJudges().some(j => j.username === username)) { UI.toast("That username is taken.", "error"); return; }
+
+    DB.addJudge({ id: "judge_" + Date.now(), name, username, password });
+    ["newJudgeName", "newJudgeUser", "newJudgePass"].forEach(f => document.getElementById(f).value = "");
+    closeModal("addJudgeModal");
+    renderJudges();
+    UI.toast(`Judge "${name}" added.`, "success");
+}
+
+async function removeJudge(id) {
+    DB.requirePermission(ACTIONS.MANAGE_JUDGES);
+    if (!await UI.confirm("This removes the judge, all of their scores and any round access they were granted.",
+                          { title: "Remove judge?", confirmText: "Remove judge" })) return;
+    DB.removeJudge(id);
+    renderJudges();
+    UI.toast("Judge removed.", "info");
+}
+
+// Schedule: Practical 4.III Drag and Drop API
+
+let draggedItem = null;
+
+function renderRounds() {
+    const rounds = DB.getRounds();
+    const teamCount = DB.getTeams().length;
+    const judgeCount = DB.getJudges().length;
+    const list = document.getElementById("roundList");
+    const esc = UI.escape;
+    list.innerHTML = "";
+
+    if (rounds.length === 0) {
+        list.innerHTML = `<li class="d-block" style="cursor:default">No rounds yet. Add one to build the schedule.</li>`;
+        document.getElementById("roundOrder").textContent = "";
+        return;
+    }
+
+    rounds.forEach((r, i) => {
+        const grants = DB.getJudges().filter(j => DB.hasRoundAccess(j.id, r.id)).length;
+        const li = document.createElement("li");
+        li.draggable = true;
+        li.dataset.roundId = r.id;
+        if (r.status === "in-progress") li.classList.add("is-live");
+        li.innerHTML = `
+            <span class="drag-handle" aria-hidden="true">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
+                    <circle cx="9" cy="6" r="1.6"/><circle cx="15" cy="6" r="1.6"/>
+                    <circle cx="9" cy="12" r="1.6"/><circle cx="15" cy="12" r="1.6"/>
+                    <circle cx="9" cy="18" r="1.6"/><circle cx="15" cy="18" r="1.6"/>
+                </svg>
+            </span>
+            <span class="round-no">${i + 1}</span>
+            <div class="round-info">
+                <span class="round-name">${esc(r.name)}</span>
+                <span class="round-meta">${formatDate(r.date)}, ${teamCount} teams, ${judgeCount} judges${
+                    grants ? `, <span class="grant">${grants} access grant${grants === 1 ? "" : "s"}</span>` : ""}</span>
+            </div>
+            <div class="round-right">
+                <select class="form-select form-select-sm w-auto" aria-label="Round status" onchange="changeRoundStatus('${esc(r.id)}', this.value)">
+                    <option value="upcoming"${r.status === "upcoming" ? " selected" : ""}>Upcoming</option>
+                    <option value="in-progress"${r.status === "in-progress" ? " selected" : ""}>In progress</option>
+                    <option value="completed"${r.status === "completed" ? " selected" : ""}>Completed</option>
+                </select>
+                <button class="btn btn-sm btn-board" onclick="openAccess('${esc(r.id)}')">Access</button>
+                <button class="btn btn-sm btn-remove" aria-label="Remove ${esc(r.name)}" onclick="removeRound('${esc(r.id)}')">Remove</button>
+            </div>`;
+
+        li.addEventListener("dragstart", function (e) {
+            draggedItem = this;
+            this.classList.add("dragging");
+            e.dataTransfer.effectAllowed = "move";
+            e.dataTransfer.setData("text/plain", r.id);
+        });
+        li.addEventListener("dragend", function () {
+            this.classList.remove("dragging");
+            list.querySelectorAll("li").forEach(el => el.classList.remove("drag-over"));
+            draggedItem = null;
+            saveRoundOrder();
+        });
+        li.addEventListener("dragover", function (e) {
+            e.preventDefault();
+            e.dataTransfer.dropEffect = "move";
+            if (this !== draggedItem) this.classList.add("drag-over");
+        });
+        li.addEventListener("dragleave", function () { this.classList.remove("drag-over"); });
+        li.addEventListener("drop", function (e) {
+            e.preventDefault();
+            this.classList.remove("drag-over");
+            if (this !== draggedItem && draggedItem) {
+                const items = Array.from(list.querySelectorAll("li"));
+                if (items.indexOf(draggedItem) < items.indexOf(this))
+                    this.parentNode.insertBefore(draggedItem, this.nextSibling);
+                else this.parentNode.insertBefore(draggedItem, this);
+            }
+        });
+
+        list.appendChild(li);
+    });
+
+    displayRoundOrder();
+}
+
+function saveRoundOrder() {
+    DB.requirePermission(ACTIONS.REORDER_ROUNDS);
+    const ids = Array.from(document.querySelectorAll("#roundList li")).map(li => li.dataset.roundId);
+    DB.updateRoundOrder(ids);
+    renderRounds();
+}
+
+function displayRoundOrder() {
+    const order = Array.from(document.querySelectorAll("#roundList li .round-name")).map(el => el.textContent);
+    document.getElementById("roundOrder").textContent = "Current order: " + order.join(", then ");
+}
+
+function changeRoundStatus(roundId, status) {
+    DB.requirePermission(ACTIONS.MANAGE_ROUNDS);
+    DB.updateRoundStatus(roundId, status);
+    renderRounds();
+    UI.toast(status === "in-progress"
+        ? "Round is live. Judges can score it now."
+        : "Round status updated.", status === "in-progress" ? "success" : "info");
+}
+
+function addRound() {
+    DB.requirePermission(ACTIONS.MANAGE_ROUNDS);
+    const name = document.getElementById("newRoundName").value.trim();
+    const date = document.getElementById("newRoundDate").value;
+    const status = document.getElementById("newRoundStatus").value;
+    if (!name || !date) { UI.toast("Please give the round a name and a date.", "error"); return; }
+
+    DB.addRound({ id: "R" + Date.now(), name, date, status });
+    document.getElementById("newRoundName").value = "";
+    document.getElementById("newRoundDate").value = "";
+    closeModal("addRoundModal");
+    renderRounds();
+    UI.toast(`Round "${name}" added.`, "success");
+}
+
+async function removeRound(id) {
+    DB.requirePermission(ACTIONS.MANAGE_ROUNDS);
+    if (!await UI.confirm("This removes the round and every score recorded in it.",
+                          { title: "Remove round?", confirmText: "Remove round" })) return;
+    DB.removeRound(id);
+    renderRounds();
+    UI.toast("Round removed.", "info");
+}
+
+// Round access grants
+
+let accessRoundId = null;
+
+function openAccess(roundId) {
+    DB.requirePermission(ACTIONS.GRANT_ROUND_ACCESS);
+    accessRoundId = roundId;
+    const round = DB.getRounds().find(r => r.id === roundId);
+    document.getElementById("accessRoundName").textContent = round ? round.name : roundId;
+    document.getElementById("accessHint").textContent = round && round.status === "in-progress"
+        ? "This round is live, so every judge can already score it. Grants matter once it is closed."
+        : "This round is locked. Tick a judge to let them score it anyway.";
+    renderAccessList();
+    new bootstrap.Modal(document.getElementById("accessModal")).show();
+}
+
+function renderAccessList() {
+    const judges = DB.getJudges();
+    const esc = UI.escape;
+    document.getElementById("accessJudgeList").innerHTML = judges.length === 0
+        ? UI.empty("No judges to grant access to.")
+        : judges.map(j => {
+            const on = DB.hasRoundAccess(j.id, accessRoundId);
+            return `<div class="form-check form-switch py-1">
+                <input class="form-check-input" type="checkbox" id="acc_${esc(j.id)}" ${on ? "checked" : ""}
+                       onchange="toggleAccess('${esc(j.id)}', this.checked)">
+                <label class="form-check-label small" for="acc_${esc(j.id)}">
+                    ${esc(j.name)} <span class="text-body-secondary">@${esc(j.username)}</span>
+                </label>
+            </div>`;
+        }).join("");
+}
+
+function toggleAccess(judgeId, granted) {
+    DB.requirePermission(ACTIONS.GRANT_ROUND_ACCESS);
+    if (granted) DB.grantRoundAccess(judgeId, accessRoundId);
+    else DB.revokeRoundAccess(judgeId, accessRoundId);
+    renderRounds();
+    UI.toast(granted ? "Scoring access granted." : "Scoring access revoked.", granted ? "success" : "info");
+}
+
+// Participants
+
+function renderParticipants() {
+    const q = document.getElementById("participantSearch").value;
+    const teams = DB.getTeams();
+    const esc = UI.escape;
+    const list = DB.getParticipants().filter(p =>
+        matches(q, p.rollNo, p.firstName, p.email, p.mobile,
+                (teams.find(t => t.id === p.teamId) || {}).name || ""));
+
+    if (list.length === 0) {
+        document.getElementById("participantsContent").innerHTML =
+            UI.empty(q ? "No participants match that search." : "No participants registered yet.");
+        return;
+    }
+
+    document.getElementById("participantsContent").innerHTML = `
+        <div class="table-responsive"><table class="table align-middle mb-0">
+            <thead><tr>
+                <th>Roll no.</th><th>Name</th><th>Mobile</th><th>Email</th><th>Team</th><th>Address</th><th></th>
+            </tr></thead>
+            <tbody>${list.map(p => {
+                const team = teams.find(t => t.id === p.teamId);
+                return `<tr>
+                    <td>${esc(p.rollNo)}</td>
+                    <td>${esc(p.firstName)}</td>
+                    <td>+91 ${esc(p.mobile)}</td>
+                    <td>${esc(p.email)}</td>
+                    <td>${esc(team ? team.name : p.teamId)}</td>
+                    <td class="small text-body-secondary">${esc(p.address)}</td>
+                    <td><button class="btn btn-outline-danger btn-sm" onclick="removeParticipant('${esc(p.rollNo)}')">Remove</button></td>
+                </tr>`;
+            }).join("")}</tbody>
+        </table></div>`;
+}
+
+async function removeParticipant(rollNo) {
+    DB.requirePermission(ACTIONS.MANAGE_PARTICIPANTS);
+    if (!await UI.confirm(`Remove participant ${rollNo} from the competition?`,
+                          { title: "Remove participant?", confirmText: "Remove" })) return;
+    DB.removeParticipant(rollNo);
+    renderParticipants();
+    UI.toast("Participant removed.", "info");
+}
+
+// All scores + CSV export
+
+function renderAllScores() {
+    const scores = DB.getScores();
+    const criteria = DB.getCriteria();
+    const judges = DB.getJudges();
+    const teams = DB.getTeams();
+    const rounds = DB.getRounds();
+    const esc = UI.escape;
+
+    if (scores.length === 0) {
+        document.getElementById("allScoresContent").innerHTML = UI.empty("No scores submitted yet.");
+        return;
+    }
+
+    document.getElementById("allScoresContent").innerHTML = `
+        <div class="table-responsive"><table class="table align-middle mb-0">
+            <thead><tr>
+                <th>Judge</th><th>Team</th><th>Round</th>
+                ${criteria.map(c => `<th>${esc(c)}</th>`).join("")}
+                <th>Total</th><th>Submitted</th>
+            </tr></thead>
+            <tbody>${scores.map(s => {
+                const judge = judges.find(j => j.id === s.judgeId);
+                const team = teams.find(t => t.id === s.teamId);
+                const round = rounds.find(r => r.id === s.roundId);
+                const vals = criteria.map(c => s.criteria[c] || 0);
+                return `<tr>
+                    <td>${esc(judge ? judge.name : s.judgeId)}</td>
+                    <td>${esc(team ? team.name : s.teamId)}</td>
+                    <td>${esc(round ? round.name : s.roundId)}</td>
+                    ${vals.map(v => `<td class="rj-digits fs-5">${v}</td>`).join("")}
+                    <td class="rj-digits fs-4">${vals.reduce((a, b) => a + b, 0)}</td>
+                    <td class="small text-body-secondary">${new Date(s.submittedAt).toLocaleDateString()}</td>
+                </tr>`;
+            }).join("")}</tbody>
+        </table></div>`;
+}
+
+function exportScores() {
+    DB.requirePermission(ACTIONS.EXPORT_SCORES);
+    const csv = DB.exportScoresCsv();
+    if (csv.split("\n").length <= 1) { UI.toast("There are no scores to export yet.", "warning"); return; }
+    UI.download(`robojudge-scores-${new Date().toISOString().split("T")[0]}.csv`, csv, "text/csv");
+    UI.toast("Scores exported to CSV.", "success");
+}
+
+// Leaderboard
+
+function renderLeaderboard() {
+    const rows = DB.getLeaderboard();
+    const rounds = DB.getRounds();
+    const esc = UI.escape;
+    const scored = rows.filter(r => r.roundsScored > 0);
+
+    if (scored.length === 0) {
+        document.getElementById("leaderboardContent").innerHTML =
+            UI.empty("No scores yet. Standings appear once judges start scoring.");
+        return;
+    }
+
+    document.getElementById("leaderboardContent").innerHTML = `
+        <div class="rj-board scoreboard table-responsive"><table>
+            <thead><tr>
+                <th>Rank</th><th>Team</th>
+                ${rounds.map(r => `<th class="text-center">${esc(r.name)}</th>`).join("")}
+                <th class="text-center">Average</th>
+            </tr></thead>
+            <tbody>${rows.map(row => {
+                const perRound = new Map(row.perRound.map(p => [p.roundId, p.average]));
+                return `<tr${row.rank === 1 ? ' class="leader"' : ""}>
+                    <td class="rank">${row.rank ? row.rank : "&ndash;"}</td>
+                    <td><div class="team">${esc(row.teamName)}</div>
+                        <div class="sub">${esc(row.university)}, ${row.roundsScored} round${row.roundsScored === 1 ? "" : "s"} scored</div></td>
+                    ${rounds.map(r => `<td class="num">${
+                        perRound.has(r.id) ? perRound.get(r.id).toFixed(1) : '<span class="sub">&ndash;</span>'
+                    }</td>`).join("")}
+                    <td class="num avg">${row.roundsScored ? row.average.toFixed(2) : '<span class="sub">&ndash;</span>'}</td>
+                </tr>`;
+            }).join("")}</tbody>
+        </table></div>`;
+}
+
+// Judge progress
+
+function renderProgress() {
+    const progress = DB.getJudgeProgress();
+    const teams = DB.getTeams();
+    const esc = UI.escape;
+
+    if (teams.length === 0 || progress.length === 0) {
+        document.getElementById("progressContent").innerHTML =
+            UI.empty("Add teams, judges and rounds to start tracking scores.");
+        return;
+    }
+
+    document.getElementById("progressContent").innerHTML = progress.map(round => {
+        const pct = round.totalExpected ? Math.round(round.totalDone / round.totalExpected * 100) : 0;
+        return `
+        <div class="mb-5 rj-on-sheet">
+            <div class="d-flex flex-wrap align-items-center gap-2 mb-2">
+                <h3 class="round-title">${esc(round.roundName)}</h3>
+                <span class="rj-status ${round.status === "in-progress" ? "is-live" : round.status === "completed" ? "is-final" : "is-upcoming"}">
+                    ${round.status === "in-progress" ? '<span class="rj-live-dot"></span>Live' : round.status === "completed" ? "Final" : "Upcoming"}
+                </span>
+                <span class="ms-auto"><span class="rj-digits fs-4">${round.totalDone}</span>
+                    <span class="text-body-secondary">of ${round.totalExpected} scores in</span></span>
+            </div>
+            <div class="progress mb-2" role="progressbar" aria-label="${esc(round.roundName)} scoring progress" aria-valuenow="${pct}" aria-valuemin="0" aria-valuemax="100">
+                <div class="progress-bar" style="width:${pct}%"></div>
+            </div>
+            ${round.judges.length === 0 ? UI.empty("No judges yet.") : `
+            <div class="table-responsive"><table class="table table-sm align-middle mb-0">
+                <thead><tr>
+                    <th>Judge</th>
+                    ${teams.map(t => `<th class="text-center small">${esc(t.id)}</th>`).join("")}
+                    <th class="text-center small">Done</th>
+                </tr></thead>
+                <tbody>${round.judges.map(j => {
+                    const done = j.scored.filter(c => c.done).length;
+                    return `<tr>
+                        <td class="small fw-semibold">${esc(j.judgeName)}</td>
+                        ${j.scored.map(c => `<td class="progress-cell" title="${esc(c.teamName)}">${
+                            c.done ? '<span class="done-mark" aria-label="Scored">&#10003;</span>' : '<span class="text-body-secondary" aria-label="Not scored">&ndash;</span>'
+                        }</td>`).join("")}
+                        <td class="text-center small ${done === teams.length ? "text-success fw-bold" : "text-body-secondary"}">
+                            ${done}/${teams.length}
+                        </td>
+                    </tr>`;
+                }).join("")}</tbody>
+            </table></div>`}
+        </div>`;
+    }).join("");
+}
+
+// Settings
+
+function renderSettings() {
+    const venue = DB.getVenue();
+    document.getElementById("venueLat").value = venue.lat;
+    document.getElementById("venueLng").value = venue.lng;
+    document.getElementById("venueRadius").value = venue.radius;
+}
+
+function updateVenue() {
+    DB.requirePermission(ACTIONS.MANAGE_VENUE);
+    const lat = document.getElementById("venueLat").value;
+    const lng = document.getElementById("venueLng").value;
+    const radius = document.getElementById("venueRadius").value;
+
+    if (!lat || !lng || !radius) { UI.toast("Please fill in all venue fields.", "error"); return; }
+    if (isNaN(parseFloat(lat)) || isNaN(parseFloat(lng)) || isNaN(parseFloat(radius))) {
+        UI.toast("Latitude, longitude and radius must be numbers.", "error"); return;
+    }
+    DB.setVenue(lat, lng, radius);
+    UI.toast("Venue configuration saved.", "success");
+}
+
+/** Set the venue to wherever the admin is standing — makes check-in testable anywhere. */
+function useMyLocation() {
+    DB.requirePermission(ACTIONS.MANAGE_VENUE);
+    const btn = document.getElementById("useMyLocationBtn");
+    const hint = document.getElementById("venueHint");
+
+    if (!navigator.geolocation) { UI.toast("Geolocation is not supported by your browser.", "error"); return; }
+
+    btn.disabled = true;
+    hint.textContent = "Getting your location…";
+
+    navigator.geolocation.getCurrentPosition(
+        pos => {
+            document.getElementById("venueLat").value = pos.coords.latitude.toFixed(6);
+            document.getElementById("venueLng").value = pos.coords.longitude.toFixed(6);
+            if (!document.getElementById("venueRadius").value) document.getElementById("venueRadius").value = 3;
+            btn.disabled = false;
+            hint.textContent = "Filled in — press Save to apply.";
+            UI.toast("Your coordinates are filled in. Press Save Configuration to apply.", "info");
+        },
+        err => {
+            btn.disabled = false;
+            hint.textContent = "";
+            UI.toast(err.code === err.PERMISSION_DENIED
+                ? "Location permission denied — allow it to use this."
+                : "Could not get your location.", "error");
+        },
+        { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+    );
+}
+
+// Logs
+
+/** "round_status" -> "Round status", for the activity log badge. */
+function actionLabel(action) {
+    const text = String(action || "").replace(/_/g, " ");
+    return text.charAt(0).toUpperCase() + text.slice(1);
+}
+
+function renderLogs() {
+    const logs = DB.getLogs();
+    const esc = UI.escape;
+    if (logs.length === 0) {
+        document.getElementById("logsContent").innerHTML = UI.empty("No activity yet.");
+        return;
+    }
+    document.getElementById("logsContent").innerHTML = `<ul class="list-group list-group-flush">
+        ${logs.map(log => {
+            const t = new Date(log.timestamp);
+            return `<li class="list-group-item d-flex flex-wrap gap-1 gap-sm-3 px-0">
+                <span class="log-action">${esc(actionLabel(log.action))}</span>
+                <div class="d-flex flex-column">
+                    <span>${esc(log.detail)}</span>
+                    <span class="text-body-secondary small">${t.toLocaleDateString()} ${t.toLocaleTimeString()}</span>
+                </div>
+            </li>`;
+        }).join("")}</ul>`;
+}
+
+// Profile
+
+function submitPasswordChange(e) {
+    e.preventDefault();
+    const current = document.getElementById("pwCurrent").value;
+    const next = document.getElementById("pwNew").value;
+    if (next !== document.getElementById("pwConfirm").value) {
+        UI.toast("The new passwords do not match.", "error"); return;
+    }
+    const result = DB.changePassword(session.userId, current, next);
+    if (!result.ok) { UI.toast(result.error, "error"); return; }
+    e.target.reset();
+    UI.toast("Password updated.", "success");
+}
+
+// Init
+
+DB.init();
+session = DB.requireAuth(["admin"]);
+
+if (session) {
+    shell = UI.mountShell({ active: "teams", onSelect: showSection });
+
+    document.getElementById("profileName").textContent = session.name;
+    document.getElementById("profileUsername").textContent = "@" + session.username;
+    document.getElementById("passwordForm").addEventListener("submit", submitPasswordChange);
+
+    // Live search
+    document.getElementById("teamSearch").addEventListener("input", renderTeams);
+    document.getElementById("judgeSearch").addEventListener("input", renderJudges);
+    document.getElementById("participantSearch").addEventListener("input", renderParticipants);
+
+    showSection("teams");
+}
+</script>
+</body>
+</html>
