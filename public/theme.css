@@ -1,0 +1,191 @@
+/*
+ * RoboJudge visual system: "competition scoreboard".
+ *
+ * Shared by the Tailwind pages (index, judge, team) and the Bootstrap pages
+ * (admin, register, login, server). Load it after Bootstrap so the overrides
+ * below win. Fonts come from Google Fonts: Barlow + Barlow Condensed.
+ *
+ * Signal amber is reserved for things that are live right now. Everything
+ * else stays in board navy, sheet white and rule grey.
+ */
+
+:root {
+    --rj-floor: #F2F4F6;
+    --rj-sheet: #FFFFFF;
+    --rj-board: #13233A;
+    --rj-board-2: #1C3150;      /* raised rows on the board */
+    --rj-board-text: #E6ECF3;
+    --rj-board-muted: #8FA0B5;
+    --rj-signal: #FFB000;
+    --rj-rule: #CBD3DC;
+    --rj-rule-soft: #E3E8EE;
+    --rj-ink: #13233A;
+    --rj-muted: #5A6676;
+    --rj-final: #1E8A5A;
+    --rj-danger: #D23A2E;
+
+    --rj-font: "Barlow", system-ui, -apple-system, "Segoe UI", sans-serif;
+    --rj-display: "Barlow Condensed", "Barlow", system-ui, sans-serif;
+    --rj-radius: 6px;
+    --rj-radius-lg: 10px;
+
+    /* Bootstrap, re-pointed at the tokens above */
+    --bs-body-font-family: var(--rj-font);
+    --bs-body-color: var(--rj-ink);
+    --bs-body-bg: var(--rj-sheet);   /* inputs, modals; the page itself uses --rj-floor */
+    --bs-secondary-color: var(--rj-muted);
+    --bs-border-color: var(--rj-rule);
+    --bs-border-radius: var(--rj-radius);
+    --bs-border-radius-sm: 4px;
+    --bs-border-radius-lg: var(--rj-radius-lg);
+    --bs-link-color: var(--rj-ink);
+    --bs-link-color-rgb: 19, 35, 58;
+    --bs-link-hover-color: #000;
+    --bs-primary: var(--rj-board);
+    --bs-primary-rgb: 19, 35, 58;
+    --bs-focus-ring-color: rgba(255, 176, 0, .45);
+}
+
+body {
+    font-family: var(--rj-font);
+    background: var(--rj-floor);
+    color: var(--rj-ink);
+    -webkit-font-smoothing: antialiased;
+}
+
+:focus-visible { outline: 3px solid var(--rj-signal); outline-offset: 2px; }
+
+/* Type */
+
+.rj-display {
+    font-family: var(--rj-display);
+    font-weight: 600;
+    letter-spacing: -.005em;
+    line-height: 1.02;
+}
+.rj-digits {
+    font-family: var(--rj-display);
+    font-variant-numeric: tabular-nums;
+    font-weight: 600;
+    line-height: 1;
+}
+.rj-page-heading {
+    font-family: var(--rj-display);
+    font-weight: 600;
+    font-size: 1.65rem;
+    line-height: 1.1;
+    margin: 0;
+    color: var(--rj-ink);
+}
+.rj-lede { color: var(--rj-muted); font-size: .95rem; max-width: 62ch; margin: .3rem 0 0; }
+
+/* Surfaces */
+
+.rj-sheet {
+    background: var(--rj-sheet);
+    border: 1px solid var(--rj-rule-soft);
+    border-radius: var(--rj-radius-lg);
+}
+.rj-board {
+    background: var(--rj-board);
+    color: var(--rj-board-text);
+    border-radius: var(--rj-radius-lg);
+}
+
+/* The round board: rounds as scoreboard rows */
+
+.rj-board-rows { list-style: none; margin: 0; padding: 0; display: grid; gap: 2px; }
+.rj-board-row {
+    display: grid;
+    grid-template-columns: 2.6rem minmax(0, 1fr) auto;
+    align-items: center;
+    gap: .9rem;
+    padding: .75rem 1rem;
+    background: var(--rj-board-2);
+    color: var(--rj-board-text);
+}
+.rj-board-row:first-child { border-radius: var(--rj-radius) var(--rj-radius) 0 0; }
+.rj-board-row:last-child  { border-radius: 0 0 var(--rj-radius) var(--rj-radius); }
+.rj-board-row:only-child  { border-radius: var(--rj-radius); }
+.rj-board-row .rj-round-no {
+    font-family: var(--rj-display);
+    font-variant-numeric: tabular-nums;
+    font-size: 1.9rem;
+    font-weight: 600;
+    line-height: 1;
+    color: var(--rj-board-muted);
+    text-align: center;
+}
+.rj-board-row .rj-round-name {
+    font-family: var(--rj-display);
+    font-size: 1.3rem;
+    font-weight: 600;
+    line-height: 1.1;
+    color: #fff;
+}
+.rj-board-row .rj-round-meta { font-size: .8rem; color: var(--rj-board-muted); }
+.rj-board-row.is-live { box-shadow: inset 4px 0 0 var(--rj-signal); }
+.rj-board-row.is-live .rj-round-no { color: var(--rj-signal); }
+
+/* Status markers. Live is the only one that uses the signal colour. */
+
+.rj-status {
+    display: inline-flex; align-items: center; gap: .4rem;
+    font-family: var(--rj-display); font-size: .95rem; font-weight: 600;
+    padding: .15rem .6rem; border-radius: 4px; white-space: nowrap;
+    border: 1px solid transparent;
+}
+.rj-status.is-live     { background: var(--rj-signal); color: var(--rj-board); }
+.rj-status.is-final    { color: #7FD3A8; border-color: rgba(127, 211, 168, .35); }
+.rj-status.is-upcoming { color: var(--rj-board-muted); border-color: rgba(143, 160, 181, .35); }
+/* Same markers on a white sheet */
+.rj-on-sheet .rj-status.is-final    { color: var(--rj-final); border-color: rgba(30, 138, 90, .35); }
+.rj-on-sheet .rj-status.is-upcoming { color: var(--rj-muted); border-color: var(--rj-rule); }
+
+.rj-live-dot {
+    width: .55rem; height: .55rem; border-radius: 50%;
+    background: var(--rj-board); flex-shrink: 0;
+    animation: rj-pulse 1.6s ease-in-out infinite;
+}
+@keyframes rj-pulse { 50% { opacity: .25; } }
+@media (prefers-reduced-motion: reduce) {
+    .rj-live-dot { animation: none; }
+}
+
+/* Bootstrap components, restyled */
+
+.btn { font-weight: 600; border-radius: var(--rj-radius); }
+.btn-primary {
+    --bs-btn-bg: var(--rj-board); --bs-btn-border-color: var(--rj-board);
+    --bs-btn-hover-bg: #0B1626; --bs-btn-hover-border-color: #0B1626;
+    --bs-btn-active-bg: #0B1626; --bs-btn-active-border-color: #0B1626;
+    --bs-btn-disabled-bg: var(--rj-board); --bs-btn-disabled-border-color: var(--rj-board);
+}
+.btn-outline-primary {
+    --bs-btn-color: var(--rj-board); --bs-btn-border-color: var(--rj-rule);
+    --bs-btn-hover-color: #fff; --bs-btn-hover-bg: var(--rj-board); --bs-btn-hover-border-color: var(--rj-board);
+    --bs-btn-active-bg: var(--rj-board); --bs-btn-active-border-color: var(--rj-board);
+}
+.btn-outline-secondary {
+    --bs-btn-color: var(--rj-muted); --bs-btn-border-color: var(--rj-rule);
+    --bs-btn-hover-color: var(--rj-ink); --bs-btn-hover-bg: var(--rj-rule-soft); --bs-btn-hover-border-color: var(--rj-rule);
+}
+.btn-outline-danger {
+    --bs-btn-color: var(--rj-danger); --bs-btn-border-color: transparent;
+    --bs-btn-hover-bg: var(--rj-danger); --bs-btn-hover-border-color: var(--rj-danger);
+}
+.form-control, .form-select { border-color: var(--rj-rule); }
+.form-control:focus, .form-select:focus {
+    border-color: var(--rj-board);
+    box-shadow: 0 0 0 .2rem rgba(255, 176, 0, .35);
+}
+.form-label { font-weight: 600; font-size: .875rem; color: var(--rj-ink); }
+.form-check-input:checked { background-color: var(--rj-board); border-color: var(--rj-board); }
+.table { --bs-table-bg: transparent; --bs-table-border-color: var(--rj-rule-soft); }
+.table > thead th {
+    font-weight: 600; font-size: .8rem; color: var(--rj-muted);
+    border-bottom-color: var(--rj-rule); background: transparent;
+}
+.modal-content { border: 0; border-radius: var(--rj-radius-lg); }
+.modal-title { font-family: var(--rj-display); font-weight: 600; font-size: 1.4rem; }
+.alert { border-radius: var(--rj-radius); }
