@@ -1,0 +1,224 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    <!-- Practical 5.III — Registration page built with Bootstrap 5 -->
+    <title>RoboJudge — Participant Registration</title>
+
+    <!-- Bootstrap served from local files (see Practical 5.II) -->
+    <link href="vendor/bootstrap/bootstrap.min.css" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600;700&family=Barlow+Condensed:wght@500;600;700&display=swap" rel="stylesheet">
+    <link href="theme.css" rel="stylesheet">
+
+    <style>
+        .page-head h1 { font-family: var(--rj-display); font-weight: 600; font-size: clamp(2.2rem, 5vw, 3.4rem); line-height: 1; }
+        .section-title { font-family: var(--rj-display); font-weight: 600; font-size: 1.6rem; line-height: 1.1; }
+        .roll { font-family: var(--rj-display); font-variant-numeric: tabular-nums; font-weight: 600; font-size: 1.1rem; }
+    </style>
+</head>
+<body>
+
+<header id="publicNav"></header>
+
+<main class="container py-5">
+    <div class="row justify-content-center">
+        <div class="col-12 col-lg-9">
+
+            <header class="page-head mb-4">
+                <!-- Title of the page (LOP requirement) -->
+                <h1 class="mb-2">Participant registration</h1>
+                <p class="text-body-secondary mb-0">
+                    Add yourself to your team's roster for RoboJudge 2026. Every field is required.
+                </p>
+            </header>
+
+            <div id="successBox" class="alert alert-success d-none" role="alert"></div>
+
+            <div class="rj-sheet">
+                <div class="p-4 p-md-5">
+
+                    <form id="registerForm" class="needs-validation" novalidate>
+                        <div class="row g-3">
+
+                            <!-- Roll Number -->
+                            <div class="col-md-6">
+                                <label for="rollNo" class="form-label">Roll number</label>
+                                <input type="text" class="form-control" id="rollNo" placeholder="e.g. 21BCE001" required>
+                                <div class="invalid-feedback">Please enter your roll number.</div>
+                            </div>
+
+                            <!-- First Name -->
+                            <div class="col-md-6">
+                                <label for="firstName" class="form-label">First name</label>
+                                <input type="text" class="form-control" id="firstName" placeholder="e.g. Aarav" required>
+                                <div class="invalid-feedback">Please enter your first name.</div>
+                            </div>
+
+                            <!-- Mobile Number -->
+                            <div class="col-md-6">
+                                <label for="mobile" class="form-label">Mobile number</label>
+                                <div class="input-group has-validation">
+                                    <span class="input-group-text">+91</span>
+                                    <input type="tel" class="form-control" id="mobile" placeholder="10-digit number"
+                                           pattern="[0-9]{10}" maxlength="10" required>
+                                    <div class="invalid-feedback">Enter a valid 10-digit mobile number.</div>
+                                </div>
+                            </div>
+
+                            <!-- Email ID -->
+                            <div class="col-md-6">
+                                <label for="email" class="form-label">Email ID</label>
+                                <input type="email" class="form-control" id="email" placeholder="you@nirmauni.ac.in" required>
+                                <div class="invalid-feedback">Enter a valid email address.</div>
+                            </div>
+
+                            <!-- Team -->
+                            <div class="col-12">
+                                <label for="teamId" class="form-label">Team</label>
+                                <select class="form-select" id="teamId" required>
+                                    <option value="">Choose your team…</option>
+                                </select>
+                                <div class="invalid-feedback">Please select your team.</div>
+                            </div>
+
+                            <!-- Address -->
+                            <div class="col-12">
+                                <label for="address" class="form-label">Address</label>
+                                <textarea class="form-control" id="address" rows="3"
+                                          placeholder="Hostel / house, street, city, PIN" required></textarea>
+                                <div class="invalid-feedback">Please enter your address.</div>
+                            </div>
+
+                            <div class="col-12 d-flex gap-2 justify-content-end mt-2">
+                                <button type="reset" class="btn btn-outline-secondary">Clear form</button>
+                                <button type="submit" class="btn btn-primary px-4">Register</button>
+                            </div>
+                        </div>
+                    </form>
+                </div>
+            </div>
+
+            <!-- Already registered participants -->
+            <div class="mt-5">
+                <div>
+                    <h2 class="section-title mb-3">Registered participants</h2>
+                    <div class="table-responsive rj-sheet px-3 py-2">
+                        <table class="table align-middle mb-0">
+                            <thead>
+                                <tr>
+                                    <th>Roll no.</th><th>Name</th><th>Mobile</th><th>Email</th><th>Team</th>
+                                </tr>
+                            </thead>
+                            <tbody id="participantRows"></tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+        </div>
+    </div>
+</main>
+
+<footer id="siteFooter"></footer>
+
+<script src="vendor/bootstrap/bootstrap.bundle.min.js"></script>
+<script src="permissions.js"></script>
+<script src="db.js"></script>
+<script src="ui.js"></script>
+<script>
+    UI.mountPublicNav("publicNav");
+    UI.mountFooter("siteFooter");
+</script>
+<script>
+    function populateTeams() {
+        var select = document.getElementById("teamId");
+        DB.getTeams().forEach(function (t) {
+            var opt = document.createElement("option");
+            opt.value = t.id;
+            opt.textContent = t.name + " (" + t.id + ")";
+            select.appendChild(opt);
+        });
+    }
+
+    function renderParticipants() {
+        var tbody = document.getElementById("participantRows");
+        var participants = DB.getParticipants();
+        tbody.innerHTML = "";
+
+        if (participants.length === 0) {
+            var empty = document.createElement("tr");
+            var cell = document.createElement("td");
+            cell.colSpan = 5;
+            cell.className = "text-body-secondary text-center py-3";
+            cell.textContent = "No one has registered yet. Use the form above to add the first participant.";
+            empty.appendChild(cell);
+            tbody.appendChild(empty);
+            return;
+        }
+
+        participants.forEach(function (p) {
+            var team = DB.getTeamById(p.teamId);
+            var row = document.createElement("tr");
+            [p.rollNo, p.firstName, "+91 " + p.mobile, p.email, team ? team.name : p.teamId]
+                .forEach(function (value, i) {
+                    var td = document.createElement("td");
+                    td.textContent = value;
+                    if (i === 0) td.className = "roll";
+                    row.appendChild(td);
+                });
+            tbody.appendChild(row);
+        });
+    }
+
+    document.getElementById("registerForm").addEventListener("submit", function (e) {
+        e.preventDefault();
+        var form = this;
+
+        if (!form.checkValidity()) {
+            form.classList.add("was-validated");
+            return;
+        }
+
+        var rollNo = document.getElementById("rollNo").value.trim();
+
+        if (DB.getParticipants().some(function (p) { return p.rollNo === rollNo; })) {
+            var box = document.getElementById("successBox");
+            box.className = "alert alert-danger";
+            box.textContent = "Roll number " + rollNo + " is already registered. Check the list below, or use a different roll number.";
+            box.classList.remove("d-none");
+            UI.toast("That roll number is already registered.", "error");
+            window.scrollTo({ top: 0, behavior: "smooth" });
+            return;
+        }
+
+        DB.addParticipant({
+            rollNo: rollNo,
+            firstName: document.getElementById("firstName").value.trim(),
+            mobile: document.getElementById("mobile").value.trim(),
+            email: document.getElementById("email").value.trim(),
+            address: document.getElementById("address").value.trim(),
+            teamId: document.getElementById("teamId").value,
+            registeredOn: new Date().toISOString().split("T")[0]
+        });
+
+        var name = document.getElementById("firstName").value.trim();
+        var success = document.getElementById("successBox");
+        success.className = "alert alert-success";
+        success.textContent = name + " is registered and now appears in the list below.";
+        success.classList.remove("d-none");
+        UI.toast(name + " is registered.", "success");
+
+        form.reset();
+        form.classList.remove("was-validated");
+        renderParticipants();
+        window.scrollTo({ top: 0, behavior: "smooth" });
+    });
+
+    populateTeams();
+    renderParticipants();
+</script>
+
+</body>
+</html>

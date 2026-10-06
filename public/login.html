@@ -1,0 +1,169 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>RoboJudge — Sign in</title>
+
+    <!-- Practical 5.I — Bootstrap 5 via CDN (online) -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet"
+          integrity="sha384-QWTKZyjpPEjISv5WaRU9OFeRpok6YctnYmDr5pNlyT2bRjXh0JMhjY6hW+ALEwIH" crossorigin="anonymous">
+    <link href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600;700&family=Barlow+Condensed:wght@500;600;700&display=swap" rel="stylesheet">
+    <link href="theme.css" rel="stylesheet">
+
+    <style>
+        .login-wrap { min-height: 100vh; }
+        .login-board { padding: 40px; display: flex; flex-direction: column; }
+        .login-board .rj-wordmark-lg {
+            font-family: var(--rj-display); font-weight: 700; font-size: 2rem;
+            color: #fff; text-decoration: none; line-height: 1;
+        }
+        .login-board h2 { font-family: var(--rj-display); font-weight: 600; font-size: 2.6rem; line-height: 1; color: #fff; }
+        .login-form { max-width: 380px; width: 100%; }
+        .login-form h1 { font-family: var(--rj-display); font-weight: 600; font-size: 2.4rem; line-height: 1; }
+        .demo-row {
+            display: flex; justify-content: space-between; align-items: baseline; width: 100%;
+            padding: .6rem .8rem; border: 1px solid var(--rj-rule); border-radius: var(--rj-radius);
+            background: var(--rj-sheet); color: var(--rj-ink); font: inherit; text-align: left;
+        }
+        .demo-row:hover { border-color: var(--rj-board); }
+        .demo-row strong { font-weight: 600; }
+        .demo-row span { color: var(--rj-muted); font-size: .9rem; }
+        @media (max-width: 991.98px) {
+            .login-board { padding: 22px 20px; }
+            .login-board h2 { font-size: 1.9rem; }
+        }
+    </style>
+</head>
+<body>
+
+<main class="container-fluid p-0">
+    <div class="row g-0 login-wrap">
+
+        <!-- The live round, so people know what they are signing in to -->
+        <section class="col-lg-6 rj-board rounded-0 login-board" aria-label="Competition status">
+            <a href="index.html" class="rj-wordmark-lg">RoboJudge</a>
+            <div class="my-4 my-lg-auto py-lg-4">
+                <h2 class="mb-2" id="liveHeadline">Rounds</h2>
+                <p class="mb-4" style="color:var(--rj-board-muted)" id="liveSub"></p>
+                <ul class="rj-board-rows d-none d-sm-grid" id="roundBoard"></ul>
+            </div>
+            <a href="index.html" class="small d-none d-lg-inline" style="color:var(--rj-board-muted)">Back to the home page</a>
+        </section>
+
+        <section class="col-lg-6 d-flex align-items-center justify-content-center p-4 p-md-5">
+            <div class="login-form">
+                <h1 class="mb-1">Sign in</h1>
+                <p class="text-body-secondary mb-4">Use the account the competition admin gave you.</p>
+
+                <div class="mb-3">
+                    <label for="username" class="form-label">Username</label>
+                    <input type="text" class="form-control form-control-lg" id="username" placeholder="e.g. sharma" autocomplete="username">
+                </div>
+
+                <div class="mb-3">
+                    <label for="password" class="form-label">Password</label>
+                    <input type="password" class="form-control form-control-lg" id="password" autocomplete="current-password">
+                </div>
+
+                <button class="btn btn-primary btn-lg w-100" onclick="handleLogin()">Sign in</button>
+
+                <div id="loginError" class="alert alert-danger py-2 small mt-3 mb-0 d-none" role="alert"></div>
+
+                <h2 class="h6 fw-semibold mt-5 mb-2">Try a demo account</h2>
+                <div class="d-grid gap-2">
+                    <button class="demo-row" onclick="fillDemo('admin', 'admin123')">
+                        <strong>Competition admin</strong><span>admin</span>
+                    </button>
+                    <button class="demo-row" onclick="fillDemo('sharma', 'judge123')">
+                        <strong>Judge</strong><span>sharma</span>
+                    </button>
+                    <button class="demo-row" onclick="fillDemo('nirma', 'team123')">
+                        <strong>Team</strong><span>nirma</span>
+                    </button>
+                </div>
+
+                <p class="small text-body-secondary mt-4 mb-0">
+                    Competing this year? <a href="register.html" class="fw-semibold">Register as a participant</a>
+                </p>
+            </div>
+        </section>
+    </div>
+</main>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"
+        integrity="sha384-YvpcrYf0tY3lHB60NNkmXc5s9fDVZLESaAA55NDzOxhy9GkcIdslK1eN7N6jIeHz" crossorigin="anonymous"></script>
+<script src="permissions.js"></script>
+<script src="db.js"></script>
+<script src="ui.js"></script>
+<script>
+    // Already signed in? Go straight to whichever dashboard this role owns.
+    (function () {
+        var s = DB.getSession();
+        if (s) window.location.href = Permissions.homeFor(s.role);
+    })();
+
+    (function renderBoard() {
+        var rounds = DB.getRounds();
+        var liveIndex = rounds.findIndex(function (r) { return r.status === "in-progress"; });
+        if (liveIndex !== -1) {
+            document.getElementById("liveHeadline").textContent = rounds[liveIndex].name + " is live";
+            document.getElementById("liveSub").textContent =
+                "Round " + (liveIndex + 1) + " of " + rounds.length + ". Judges can score it after checking in at the venue.";
+        } else {
+            document.getElementById("liveSub").textContent = "No round is running right now.";
+        }
+
+        var STATUS = {
+            "in-progress": ["is-live", "Live"], completed: ["is-final", "Final"], upcoming: ["is-upcoming", "Upcoming"]
+        };
+        document.getElementById("roundBoard").innerHTML = rounds.map(function (r, i) {
+            var s = STATUS[r.status] || STATUS.upcoming;
+            return '<li class="rj-board-row ' + (r.status === "in-progress" ? "is-live" : "") + '">' +
+                '<span class="rj-round-no">' + (i + 1) + '</span>' +
+                '<span class="rj-round-name text-truncate">' + UI.escape(r.name) + '</span>' +
+                '<span class="rj-status ' + s[0] + '">' +
+                (r.status === "in-progress" ? '<span class="rj-live-dot"></span>' : "") + s[1] + '</span></li>';
+        }).join("");
+    })();
+
+    function fillDemo(username, password) {
+        document.getElementById("username").value = username;
+        document.getElementById("password").value = password;
+        handleLogin();
+    }
+
+    function handleLogin() {
+        var username = document.getElementById("username").value.trim();
+        var password = document.getElementById("password").value;
+        var errEl = document.getElementById("loginError");
+
+        errEl.classList.add("d-none");
+
+        if (!username || !password) {
+            errEl.textContent = "Enter both your username and password.";
+            errEl.classList.remove("d-none");
+            return;
+        }
+
+        var session = DB.login(username, password);
+        if (!session) {
+            errEl.textContent = "That username and password don't match an account. Check them and try again.";
+            errEl.classList.remove("d-none");
+            UI.toast("Sign-in failed. Check your username and password.", "error");
+            return;
+        }
+
+        window.location.href = Permissions.homeFor(session.role);
+    }
+
+    document.getElementById("password").addEventListener("keydown", function (e) {
+        if (e.key === "Enter") handleLogin();
+    });
+    document.getElementById("username").addEventListener("keydown", function (e) {
+        if (e.key === "Enter") document.getElementById("password").focus();
+    });
+</script>
+
+</body>
+</html>
