@@ -1,0 +1,210 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>RoboJudge — Judge</title>
+
+    <!-- Practical 6 — Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: { extend: {
+                fontFamily: {
+                    sans: ['Barlow', 'system-ui', 'sans-serif'],
+                    display: ['"Barlow Condensed"', 'Barlow', 'sans-serif']
+                },
+                colors: {
+                    floor: '#F2F4F6', board: { DEFAULT: '#13233A', 2: '#1C3150', muted: '#8FA0B5' },
+                    signal: '#FFB000', rule: { DEFAULT: '#CBD3DC', soft: '#E3E8EE' },
+                    ink: '#13233A', muted: '#5A6676', final: '#1E8A5A', danger: '#D23A2E'
+                }
+            } }
+        };
+    </script>
+    <link href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600;700&family=Barlow+Condensed:wght@500;600;700&display=swap" rel="stylesheet">
+    <link href="theme.css" rel="stylesheet">
+
+    <!-- Leaflet — Practical 4.I venue map -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin=""/>
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
+
+    <!-- Practical 7 — Vue 3, used for the Schedule section and its custom directives -->
+    <script src="https://unpkg.com/vue@3/dist/vue.global.prod.js"></script>
+    <style>
+        [v-cloak] { display: none; }
+        .score-range { accent-color: var(--rj-board); }
+    </style>
+</head>
+<body class="font-sans bg-floor text-ink antialiased">
+
+<!-- The shared shell (sidebar, header, footer) is rendered here by ui.js -->
+<div id="rjShell"></div>
+
+<!-- Page sections; UI.mountShell moves these into the content area -->
+<div id="rjSections">
+
+    <!-- Check-In (Practical 4.I — Geolocation API) -->
+    <section id="checkin" class="mx-auto max-w-4xl">
+        <div class="rj-sheet p-6">
+            <div class="flex flex-wrap items-start justify-between gap-4">
+                <div>
+                    <h2 class="font-display text-3xl font-semibold leading-none">Venue check-in</h2>
+                    <p class="mt-2 max-w-[60ch] text-muted">
+                        Scoring unlocks once your location is inside the venue radius.
+                    </p>
+                </div>
+                <span id="checkinStatus" class="inline-block rounded px-3 py-1 font-display text-lg font-semibold">Locating…</span>
+            </div>
+
+            <p class="mt-4 text-sm text-muted">
+                Your position: <span class="rj-digits text-base text-ink" id="lat">--</span>,
+                <span class="rj-digits text-base text-ink" id="lng">--</span>
+            </p>
+
+            <div id="map" class="mt-3 h-72 w-full overflow-hidden rounded-md border border-rule"></div>
+
+            <div id="checkinResult" class="mt-5 hidden flex flex-wrap items-center justify-between gap-3 rounded-md bg-board p-4 text-white">
+                <p class="font-semibold">You're at the venue. Scoring is unlocked.</p>
+                <button onclick="proceedToScoring()"
+                        class="rounded-md bg-signal px-5 py-2.5 font-semibold text-board hover:brightness-95">
+                    Go to scoring
+                </button>
+            </div>
+
+            <div id="checkinError" class="mt-5 hidden rounded-md border border-danger/30 bg-danger/5 p-4 text-danger"></div>
+
+            <button id="retryCheckinBtn" onclick="initCheckin()"
+                    class="mt-3 hidden rounded-md border border-rule px-5 py-2.5 font-semibold text-ink hover:bg-rule-soft">
+                Try check-in again
+            </button>
+        </div>
+    </section>
+
+    <!-- Scoring (Practical 4.II — Local Storage autosave) -->
+    <section id="scoring" class="mx-auto hidden max-w-4xl">
+        <div class="rj-sheet p-6">
+            <h2 class="font-display text-3xl font-semibold leading-none">Score a team</h2>
+            <p class="mt-2 max-w-[60ch] text-muted">
+                Each criterion is out of 10. Your draft saves in this browser as you move the sliders.
+            </p>
+
+            <div class="mt-6 grid grid-cols-1 gap-4 sm:grid-cols-2">
+                <div>
+                    <label for="teamSelect" class="mb-1 block text-sm font-semibold">Team</label>
+                    <select id="teamSelect" onchange="loadScoreForm()"
+                            class="w-full rounded-md border border-rule bg-white px-3 py-2.5 focus:border-board focus:outline-none focus:ring-2 focus:ring-signal/40"></select>
+                </div>
+                <div>
+                    <label for="roundSelect" class="mb-1 block text-sm font-semibold">Round</label>
+                    <select id="roundSelect" onchange="loadScoreForm()"
+                            class="w-full rounded-md border border-rule bg-white px-3 py-2.5 focus:border-board focus:outline-none focus:ring-2 focus:ring-signal/40"></select>
+                </div>
+            </div>
+
+            <!-- Shown when the selected round is locked -->
+            <div id="lockNotice" class="mt-5 hidden"></div>
+
+            <div id="criteriaInputs" class="mt-4"></div>
+
+            <div id="scoreActions" class="mt-5 flex flex-wrap items-center justify-between gap-3 border-t border-rule-soft pt-4">
+                <span id="autosaveStatus" class="text-sm text-muted"></span>
+                <div class="flex gap-2">
+                    <button onclick="clearSavedScores()"
+                            class="rounded-md border border-rule px-4 py-2.5 font-semibold text-ink hover:bg-rule-soft">
+                        Discard draft
+                    </button>
+                    <button onclick="submitScores()"
+                            class="rounded-md bg-board px-5 py-2.5 font-semibold text-white hover:bg-[#0B1626]">
+                        Submit scores
+                    </button>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Schedule (read-only) -->
+    <section id="rounds" class="mx-auto hidden max-w-4xl">
+        <div class="rj-sheet p-6">
+            <h2 class="font-display text-3xl font-semibold leading-none">Round order</h2>
+            <p class="mt-2 max-w-[60ch] text-muted">
+                Set by the competition admin. You can score only the round that is live, unless the admin gives you access.
+            </p>
+            <!-- Rendered by Vue (judge.js); v-uppercase, v-status and v-date are custom directives -->
+            <div id="roundsApp" v-cloak>
+                <div class="mt-5 flex flex-wrap gap-2" role="group" aria-label="Filter rounds">
+                    <button v-for="f in filters" :key="f.id" type="button" @click="filter = f.id"
+                            :aria-pressed="filter === f.id"
+                            :class="filter === f.id ? 'bg-board text-white border-board' : 'bg-white text-ink border-rule hover:border-board'"
+                            class="rounded-md border px-3 py-1.5 text-sm font-semibold">
+                        {{ f.label }} <span class="rj-digits ml-1 opacity-70">{{ countFor(f.id) }}</span>
+                    </button>
+                </div>
+                <div class="rj-board mt-4 p-1.5">
+                    <ul class="rj-board-rows">
+                        <li v-for="r in visibleRounds" :key="r.id" v-status="r" class="rj-board-row">
+                            <span class="rj-round-no">{{ r.sequenceNo }}</span>
+                            <div class="min-w-0">
+                                <span v-uppercase="r.name" class="rj-round-name block cursor-pointer select-none truncate"
+                                      title="Click to toggle uppercase"></span>
+                                <span class="rj-round-meta">
+                                    <span class="rj-date" v-date="r.date"></span>
+                                    <span v-if="!r.allowed" class="ml-2 inline-flex items-center gap-1" :title="r.reason">
+                                        <span v-html="lockIcon"></span> Locked for you
+                                    </span>
+                                </span>
+                            </div>
+                            <span data-status-pill class="rj-status">
+                                <span v-if="r.status === 'in-progress'" class="rj-live-dot"></span>{{ r.statusText }}
+                            </span>
+                        </li>
+                        <li v-if="visibleRounds.length === 0" class="rj-board-row">
+                            <span></span><span class="rj-round-meta">No rounds match this filter.</span><span></span>
+                        </li>
+                    </ul>
+                </div>
+                <p class="mt-3 text-sm text-muted">{{ teamCount }} teams are competing in each round.</p>
+            </div>
+        </div>
+    </section>
+
+    <!-- Profile -->
+    <section id="profile" class="mx-auto hidden max-w-2xl">
+        <div class="rj-sheet p-6">
+            <h2 class="font-display text-3xl font-semibold leading-none" id="profileName"></h2>
+            <p class="mt-1 text-muted"><span id="profileUsername"></span>, judge</p>
+
+            <h3 class="mt-8 font-semibold">Change password</h3>
+            <form id="passwordForm" class="mt-3 space-y-4">
+                <div>
+                    <label for="pwCurrent" class="mb-1 block text-sm font-semibold">Current password</label>
+                    <input type="password" id="pwCurrent" required
+                           class="w-full rounded-md border border-rule px-3 py-2.5 focus:border-board focus:outline-none focus:ring-2 focus:ring-signal/40">
+                </div>
+                <div>
+                    <label for="pwNew" class="mb-1 block text-sm font-semibold">New password</label>
+                    <input type="password" id="pwNew" required minlength="5"
+                           class="w-full rounded-md border border-rule px-3 py-2.5 focus:border-board focus:outline-none focus:ring-2 focus:ring-signal/40">
+                    <p class="mt-1 text-sm text-muted">At least 5 characters.</p>
+                </div>
+                <div>
+                    <label for="pwConfirm" class="mb-1 block text-sm font-semibold">Confirm new password</label>
+                    <input type="password" id="pwConfirm" required
+                           class="w-full rounded-md border border-rule px-3 py-2.5 focus:border-board focus:outline-none focus:ring-2 focus:ring-signal/40">
+                </div>
+                <button type="submit"
+                        class="rounded-md bg-board px-5 py-2.5 font-semibold text-white hover:bg-[#0B1626]">
+                    Change password
+                </button>
+            </form>
+        </div>
+    </section>
+
+</div>
+
+<script src="permissions.js"></script>
+<script src="db.js"></script>
+<script src="ui.js"></script>
+<script src="judge.js"></script>
+</body>
+</html>
